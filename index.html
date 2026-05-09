@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Rifa2</title>
+
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#111827">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+body{
+  font-family:Arial;
+  background:#f5f5f5;
+  text-align:center;
+  margin:0;
+}
+
+h1{
+  margin:20px 0 5px;
+}
+
+.sub{
+  color:#666;
+  margin-bottom:15px;
+}
+
+#estado{
+  font-size:13px;
+  color:#555;
+  margin-bottom:12px;
+}
+
+.grid{
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  gap:10px;
+  padding:15px;
+  max-width:600px;
+  margin:auto;
+}
+
+.num{
+  padding:20px;
+  border-radius:12px;
+  font-weight:bold;
+  font-size:20px;
+  cursor:pointer;
+  transition:.2s;
+}
+
+.num:hover{
+  transform:scale(1.05);
+}
+
+.disponible{
+  background:#ddd;
+}
+
+.vendido{
+  background:#ffcc00;
+}
+
+.pagado{
+  background:#00cc66;
+  color:white;
+}
+</style>
+</head>
+
+<body>
+
+<h1>Rifa2</h1>
+
+<div class="sub">
+Lotería Nacional · 22 de junio · 2€
+</div>
+
+<div id="estado">Cargando números...</div>
+
+<div class="grid" id="grid"></div>
+
+<script>
+const SUPABASE_URL = "https://lahtsdinzrqlsqbthysx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_IyN4z4MIO-G3auJ9PTBn_g_-xrxk1XO";
+
+async function cargar(){
+
+  const estado = document.getElementById("estado");
+  const grid = document.getElementById("grid");
+
+  try {
+
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/rifa2?select=*&order=numero.asc`,
+      {
+        headers:{
+          apikey: SUPABASE_KEY,
+          Authorization:`Bearer ${SUPABASE_KEY}`
+        },
+        cache:"no-store"
+      }
+    );
+
+    if(!res.ok){
+      estado.innerText = "Error cargando datos";
+      return;
+    }
+
+    const data = await res.json();
+
+    estado.innerText = "";
+
+    grid.innerHTML = "";
+
+    data.forEach(n=>{
+
+      const div = document.createElement("div");
+
+      let clase = "disponible";
+
+      if(n.estado === "vendido") clase = "vendido";
+      if(n.pagado === true) clase = "pagado";
+
+      div.className = "num " + clase;
+
+      div.innerText = String(n.numero).padStart(2,"0");
+
+      div.onclick = async ()=>{
+
+        if(n.estado !== "disponible"){
+          alert(
+            "Número " +
+            div.innerText +
+            "\nComprador: " +
+            (n.nombre || "sin nombre")
+          );
+          return;
+        }
+
+        const nombre = prompt("Nombre comprador:");
+
+        if(!nombre) return;
+
+        await fetch(
+          `${SUPABASE_URL}/rest/v1/rifa2?id=eq.${n.id}`,
+          {
+            method:"PATCH",
+            headers:{
+              apikey: SUPABASE_KEY,
+              Authorization:`Bearer ${SUPABASE_KEY}`,
+              "Content-Type":"application/json",
+              Prefer:"return=minimal"
+            },
+            body:JSON.stringify({
+              estado:"vendido",
+              nombre:nombre
+            })
+          }
+        );
+
+        setTimeout(cargar,300);
+      };
+
+      div.ondblclick = async ()=>{
+
+        if(n.estado !== "vendido") return;
+
+        await fetch(
+          `${SUPABASE_URL}/rest/v1/rifa2?id=eq.${n.id}`,
+          {
+            method:"PATCH",
+            headers:{
+              apikey: SUPABASE_KEY,
+              Authorization:`Bearer ${SUPABASE_KEY}`,
+              "Content-Type":"application/json",
+              Prefer:"return=minimal"
+            },
+            body:JSON.stringify({
+              pagado:true
+            })
+          }
+        );
+
+        setTimeout(cargar,300);
+      };
+
+      grid.appendChild(div);
+
+    });
+
+  } catch(e){
+
+    estado.innerText = "Error de conexión";
+
+  }
+
+}
+
+cargar();
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js');
+}
+</script>
+
+</body>
+</html>
